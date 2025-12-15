@@ -1,7 +1,6 @@
 "use node";
 
 import ipaddr from "ipaddr.js";
-import { PrivyClient } from "@privy-io/node";
 import slugify from "slugify";
 import { v } from "convex/values";
 import {
@@ -11,7 +10,7 @@ import {
 } from "convex/server";
 import { lookup } from "node:dns/promises";
 import { randomUUID } from "node:crypto";
-import { z } from "zod";
+import { getPrivyClient } from "./_privy";
 
 const CategoryValidator = v.union(
   v.literal("defi"),
@@ -32,8 +31,6 @@ const BLOCKED_IP_RANGES = new Set([
   "uniqueLocal",
   "unspecified",
 ]);
-
-let privyClient: PrivyClient | null = null;
 
 const createInternalRef =
   makeFunctionReference<
@@ -68,31 +65,6 @@ const getBySlugRef = makeFunctionReference<
   { slug: string },
   { isActive: boolean; baseUrl: string } | null
 >("listings:getBySlug");
-
-function getPrivyClient(): PrivyClient {
-  if (privyClient) return privyClient;
-
-  const parsed = z
-    .object({
-      PRIVY_APP_ID: z.string().min(1),
-      PRIVY_APP_SECRET: z.string().min(1),
-    })
-    .safeParse({
-      PRIVY_APP_ID: process.env.PRIVY_APP_ID,
-      PRIVY_APP_SECRET: process.env.PRIVY_APP_SECRET,
-    });
-
-  if (!parsed.success) {
-    throw new Error(
-      "Missing PRIVY_APP_ID / PRIVY_APP_SECRET in Convex environment variables"
-    );
-  }
-  privyClient = new PrivyClient({
-    appId: parsed.data.PRIVY_APP_ID,
-    appSecret: parsed.data.PRIVY_APP_SECRET,
-  });
-  return privyClient;
-}
 
 function isBlockedHostname(hostname: string): boolean {
   const h = hostname.toLowerCase();

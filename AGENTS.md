@@ -379,9 +379,10 @@ Environment variables are validated via Zod:
 ## Architecture Overview
 
 - `src/app/layout.tsx` loads global styles and mounts `src/app/providers.tsx`.
-- `src/app/providers.tsx` wraps the app with `PrivyProvider` and `ConvexProvider` using `src/lib/env/client.ts`.
+- `src/app/providers.tsx` wraps the app with `PrivyProvider` and `ConvexProvider` using `src/lib/env/client.ts`, and mounts `src/components/auth/SyncConvexUser.tsx` to upsert the authenticated user into Convex.
 - Authenticated routes live under `src/app/(app)/app/**` and are protected by `src/components/auth/AuthGate.tsx` (redirects to `/sign-in?next=...`).
 - Movement wallet creation is enforced client-side by `src/components/auth/EnsureMovementWallet.tsx` using Privy extended chains (`useCreateWallet` with `chainType: "movement"`).
+- Privy-authenticated users are upserted into the Convex `users` table via `convex/actions/users.ts` (identity token verification) + `convex/users.ts` (internal mutation); `movementAddress` is stored when available.
 - On-chain Movement balance reads happen server-side in `src/app/api/movement/balance/route.ts` and `src/app/api/paid/movement/move-balance/route.ts` using `src/lib/movement/balance.ts` + `src/lib/movement/client.ts` (Aptos TS SDK).
 - Movement portfolio reports are built server-side in `src/app/api/paid/movement/portfolio/route.ts` using `src/lib/movement/indexer.ts` (Movement Indexer GraphQL) and stored in Convex `portfolioReports` via `convex/portfolioReports.ts`.
 - UI primitives live in `src/components/ui/**` and the wallet UX is implemented in `src/features/wallet/MovementWalletCard.tsx` (SWR polling + faucet link).

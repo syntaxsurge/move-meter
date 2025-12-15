@@ -4,6 +4,7 @@ import * as React from "react";
 import { PrivyProvider } from "@privy-io/react-auth";
 import { ConvexProvider, ConvexReactClient } from "convex/react";
 import { clientEnv } from "@/lib/env/client";
+import { SyncConvexUser } from "@/components/auth/SyncConvexUser";
 
 const convex = new ConvexReactClient(clientEnv.NEXT_PUBLIC_CONVEX_URL);
 
@@ -15,7 +16,10 @@ export function Providers({ children }: { children: React.ReactNode }) {
         loginMethods: ["email", "google"],
       }}
     >
-      <ConvexProvider client={convex}>{children}</ConvexProvider>
+      <ConvexProvider client={convex}>
+        <SyncConvexUser />
+        {children}
+      </ConvexProvider>
     </PrivyProvider>
   );
 }

@@ -74,6 +74,15 @@ export type PortfolioReportCreateArgs = {
   data: unknown;
 };
 
+export type User = {
+  _id: string;
+  _creationTime: number;
+  privyDid: string;
+  movementAddress?: string;
+  createdAt: number;
+  updatedAt: number;
+};
+
 export const api = {
   listings: {
     publicList: makeFunctionReference<"query", { limit?: number }, Listing[]>(
@@ -113,6 +122,13 @@ export const api = {
         },
         TryCallResult
       >("actions/listings:tryCall"),
+    },
+    users: {
+      upsertCurrentUser: makeFunctionReference<
+        "action",
+        { idToken: string; movementAddress?: string },
+        { id: string }
+      >("actions/users:upsertCurrentUser"),
     },
   },
   payments: {
@@ -155,6 +171,11 @@ export const api = {
     >("portfolioReports:create"),
     getBySlug: makeFunctionReference<"query", { slug: string }, PortfolioReport | null>(
       "portfolioReports:getBySlug"
+    ),
+  },
+  users: {
+    getByPrivyDid: makeFunctionReference<"query", { privyDid: string }, User | null>(
+      "users:getByPrivyDid"
     ),
   },
 } as const;

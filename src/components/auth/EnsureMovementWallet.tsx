@@ -9,7 +9,7 @@ type Props = {
   children?: React.ReactNode | ((args: { movementAddress: string }) => React.ReactNode);
 };
 
-function getMovementWalletAddress(user: User | null): string | null {
+export function getMovementWalletAddress(user: User | null): string | null {
   if (!user) return null;
   const wallets = user.linkedAccounts.filter(
     (a): a is WalletWithMetadata => a.type === "wallet"
