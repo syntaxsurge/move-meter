@@ -2,9 +2,10 @@
 
 import * as React from "react";
 import { useMutation, useQuery } from "convex/react";
-import { useCreateWallet, useWallets, useX402Fetch } from "@privy-io/react-auth";
+import { useX402Fetch } from "@privy-io/react-auth";
 import { decodePaymentResponseHeader } from "@x402/core/http";
 import { api } from "@/lib/convex/api";
+import { useEvmPaymentWallet } from "@/features/x402/useEvmPaymentWallet";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -41,10 +42,6 @@ function getExplorerTxUrl(network: string, tx: string): string | null {
   return null;
 }
 
-function isEvmAddress(address: string): boolean {
-  return /^0x[a-fA-F0-9]{40}$/.test(address);
-}
-
 export function PaidMeterReportCard({
   endpoint,
   network,
@@ -52,15 +49,16 @@ export function PaidMeterReportCard({
   priceUsd,
   maxValue,
 }: Props) {
-  const { ready: walletsReady, wallets } = useWallets();
-  const { createWallet } = useCreateWallet();
   const { wrapFetchWithPayment } = useX402Fetch();
+  const {
+    walletsReady,
+    paymentWalletAddress,
+    creatingWallet,
+    walletError,
+    ensurePaymentWallet,
+  } = useEvmPaymentWallet();
 
   const recordReceipt = useMutation(api.payments.recordReceipt);
-
-  const [walletAddress, setWalletAddress] = React.useState<string | null>(null);
-  const [creatingWallet, setCreatingWallet] = React.useState(false);
-  const [walletError, setWalletError] = React.useState<string | null>(null);
 
   const [loading, setLoading] = React.useState(false);
   const [result, setResult] = React.useState<MeterReport | null>(null);
@@ -69,36 +67,8 @@ export function PaidMeterReportCard({
 
   const receipts = useQuery(
     api.payments.listReceiptsForWallet,
-    walletAddress ? { payerWalletAddress: walletAddress } : "skip"
+    paymentWalletAddress ? { payerWalletAddress: paymentWalletAddress } : "skip"
   );
-
-  React.useEffect(() => {
-    if (!walletsReady) return;
-    const addr = wallets.find((w) => isEvmAddress(w.address))?.address ?? null;
-    if (addr) setWalletAddress(addr);
-  }, [walletsReady, wallets]);
-
-  async function ensureWallet() {
-    if (walletAddress) return walletAddress;
-    if (creatingWallet) return null;
-
-    setCreatingWallet(true);
-    setWalletError(null);
-    try {
-      const wallet = await createWallet();
-      if (!isEvmAddress(wallet.address)) {
-        throw new Error("Created wallet is not an EVM address");
-      }
-      setWalletAddress(wallet.address);
-      return wallet.address;
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      setWalletError(msg);
-      return null;
-    } finally {
-      setCreatingWallet(false);
-    }
-  }
 
   async function run() {
     setLoading(true);
@@ -107,7 +77,7 @@ export function PaidMeterReportCard({
     setPaymentTx(null);
 
     try {
-      const payerWalletAddress = await ensureWallet();
+      const payerWalletAddress = await ensurePaymentWallet();
       if (!payerWalletAddress) {
         throw new Error("No payment wallet available");
       }
@@ -206,12 +176,12 @@ export function PaidMeterReportCard({
             </a>
           </Button>
 
-          {walletAddress ? (
+          {paymentWalletAddress ? (
             <Button
               variant="secondary"
               onClick={async () => {
                 try {
-                  await navigator.clipboard.writeText(walletAddress);
+                  await navigator.clipboard.writeText(paymentWalletAddress);
                 } catch {
                   // no-op
                 }
@@ -220,7 +190,7 @@ export function PaidMeterReportCard({
               Copy payment wallet
             </Button>
           ) : (
-            <Button variant="secondary" onClick={() => void ensureWallet()}>
+            <Button variant="secondary" onClick={() => void ensurePaymentWallet()}>
               {creatingWallet ? "Creating wallet…" : "Create payment wallet"}
             </Button>
           )}
@@ -257,7 +227,7 @@ export function PaidMeterReportCard({
 
         <div>
           <div className="text-sm font-medium">Recent receipts</div>
-          {walletAddress ? (
+          {paymentWalletAddress ? (
             receipts === undefined ? (
               <div className="mt-1 text-sm text-muted-foreground">Loading…</div>
             ) : receipts.length === 0 ? (

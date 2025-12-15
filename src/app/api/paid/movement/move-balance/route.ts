@@ -1,5 +1,6 @@
 import { withX402 } from "@x402/next";
 import { NextResponse, type NextRequest } from "next/server";
+import { logPaidCallServer } from "@/lib/convex/http";
 import { serverEnv } from "@/lib/env/server";
 import { getX402ServerEnv } from "@/lib/env/x402";
 import { getMovementCoinBalance } from "@/lib/movement/balance";
@@ -34,6 +35,7 @@ type MoveBalanceResponse =
     };
 
 async function handler(req: NextRequest): Promise<NextResponse<MoveBalanceResponse>> {
+  const x402Env = getX402ServerEnv();
   const url = new URL(req.url);
   const addressParam = url.searchParams.get("address");
   const address = MovementAddressSchema.parse(addressParam);
@@ -41,6 +43,13 @@ async function handler(req: NextRequest): Promise<NextResponse<MoveBalanceRespon
 
   try {
     const bal = await getMovementCoinBalance({ address, coinType });
+    void logPaidCallServer({
+      route: "/api/paid/movement/move-balance",
+      network: x402Env.X402_NETWORK,
+      payTo: x402Env.X402_PAY_TO_ADDRESS,
+      priceUsd: x402Env.X402_PRICE_USD,
+      ok: true,
+    });
     return NextResponse.json<MoveBalanceResponse>(
       {
         ok: true,
@@ -56,6 +65,13 @@ async function handler(req: NextRequest): Promise<NextResponse<MoveBalanceRespon
     );
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
+    void logPaidCallServer({
+      route: "/api/paid/movement/move-balance",
+      network: x402Env.X402_NETWORK,
+      payTo: x402Env.X402_PAY_TO_ADDRESS,
+      priceUsd: x402Env.X402_PRICE_USD,
+      ok: false,
+    });
     return NextResponse.json<MoveBalanceResponse>(
       { ok: false, error: "Failed to read MOVE balance from Movement fullnode", details: message },
       { status: 502, headers: { "Cache-Control": "no-store" } }

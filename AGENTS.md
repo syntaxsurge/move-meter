@@ -342,11 +342,11 @@ Select **one** backend stack (Drizzle+Supabase or Convex) per project by default
 
 # Platform Summary
 
-MoveMeter is a Next.js 15 App Router app that uses Privy for authentication and Movement wallet provisioning, Convex as the backend data layer for marketplace listings and receipts, and x402 to enforce pay-per-request access to paid API routes.
+MoveMeter is a Next.js 15 App Router app that uses Privy for authentication and Movement wallet provisioning, Convex as the backend data layer for marketplace listings, receipts, shareable portfolio reports, and usage analytics, Movement Indexer GraphQL for portfolio data, and x402 to enforce pay-per-request access to paid API routes.
 
 Environment variables are validated via Zod:
 - Public: `NEXT_PUBLIC_CONVEX_URL`, `NEXT_PUBLIC_PRIVY_APP_ID`
-- Server (Next.js): `MOVEMENT_CHAIN_ID`, `MOVEMENT_FULLNODE_URL`, `MOVEMENT_FAUCET_URL`, `MOVEMENT_EXPLORER_URL`, `MOVEMENT_BASE_COIN_TYPE`, `X402_FACILITATOR_URL`, `X402_NETWORK`, `X402_PAY_TO_ADDRESS`, `X402_PRICE_USD`
+- Server (Next.js): `MOVEMENT_CHAIN_ID`, `MOVEMENT_FULLNODE_URL`, `MOVEMENT_INDEXER_URL`, `MOVEMENT_FAUCET_URL`, `MOVEMENT_EXPLORER_URL`, `MOVEMENT_BASE_COIN_TYPE`, `X402_FACILITATOR_URL`, `X402_NETWORK`, `X402_PAY_TO_ADDRESS`, `X402_PRICE_USD`, `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`
 - Server (Convex): `PRIVY_APP_ID`, `PRIVY_APP_SECRET`
 
 ## Core Commands
@@ -364,13 +364,17 @@ Environment variables are validated via Zod:
 - `/marketplace` – public listings marketplace
 - `/marketplace/[slug]` – listing details with Try Console
 - `/app/dashboard` – authenticated dashboard
+- `/app/dashboard/analytics` – authenticated paid-call analytics dashboard
 - `/app/meter-report` – authenticated x402 pay-per-request tools UI (meter report + MOVE balance lookup)
+- `/app/portfolio` – authenticated portfolio report generator (x402 + share link)
 - `/app/wallet` – authenticated wallet page
 - `/app/dev/dashboard` – authenticated provider dashboard
 - `/app/dev/new` – authenticated listing creation
+- `/r/[slug]` – public share page for a saved portfolio report
 - `/api/movement/balance?address=0x...` – returns Movement base coin balance for an address
 - `/api/paid/meter-report` – x402-protected paid API returning Movement ledger snapshot
 - `/api/paid/movement/move-balance?address=0x...` – x402-protected paid API returning MOVE balance for an address
+- `/api/paid/movement/portfolio` – x402-protected paid API returning a Movement portfolio report (POST JSON body)
 
 ## Architecture Overview
 
@@ -379,12 +383,16 @@ Environment variables are validated via Zod:
 - Authenticated routes live under `src/app/(app)/app/**` and are protected by `src/components/auth/AuthGate.tsx` (redirects to `/sign-in?next=...`).
 - Movement wallet creation is enforced client-side by `src/components/auth/EnsureMovementWallet.tsx` using Privy extended chains (`useCreateWallet` with `chainType: "movement"`).
 - On-chain Movement balance reads happen server-side in `src/app/api/movement/balance/route.ts` and `src/app/api/paid/movement/move-balance/route.ts` using `src/lib/movement/balance.ts` + `src/lib/movement/client.ts` (Aptos TS SDK).
+- Movement portfolio reports are built server-side in `src/app/api/paid/movement/portfolio/route.ts` using `src/lib/movement/indexer.ts` (Movement Indexer GraphQL) and stored in Convex `portfolioReports` via `convex/portfolioReports.ts`.
 - UI primitives live in `src/components/ui/**` and the wallet UX is implemented in `src/features/wallet/MovementWalletCard.tsx` (SWR polling + faucet link).
 - Marketplace routes live in `src/app/(marketing)/marketplace/**` and are implemented in `src/features/listings/**` using Convex queries/actions.
 - Frontend Convex function references live in `src/lib/convex/api.ts` (manual `makeFunctionReference` API, no `convex/_generated/**` dependency).
 - x402 configuration is validated in `src/lib/env/x402.ts` and the resource server is initialized in `src/lib/x402/server.ts` (HTTP facilitator client + Exact EVM scheme registration).
 - The paid report endpoint is implemented in `src/app/api/paid/meter-report/route.ts` using `withX402` from `@x402/next` (settlement only after successful responses).
 - Paid x402 UI lives in `src/features/x402/**` (Privy `useX402Fetch` + Convex receipt storage) and is rendered on `src/app/(app)/app/meter-report/page.tsx`.
+- Portfolio report UI lives in `src/features/x402/PaidPortfolioReportCard.tsx` and is rendered on `src/app/(app)/app/portfolio/page.tsx`; public share links render on `src/app/(marketing)/r/[slug]/page.tsx`.
+- Usage analytics are recorded in Convex `usageEvents`/`usageDaily` (`convex/usageEvents.ts`) from paid route handlers via `src/lib/convex/http.ts` and rendered on `src/app/(app)/app/dashboard/analytics/page.tsx` (Recharts + `src/components/ui/chart.tsx`).
+- Paid API rate limiting uses Upstash when configured (`src/lib/security/ratelimit.ts` + `src/lib/env/upstash.ts`).
 - Provider listing creation and Try Console are implemented as Convex Node Actions in `convex/actions/listings.ts` (Privy identity token verification + SSRF-hardened fetch) and backed by `convex/listings.ts` + `convex/schema.ts`.
 - Payment receipts are stored in `paymentReceipts` in `convex/schema.ts` and written/read via `convex/payments.ts`.
 - Privy identity tokens must be enabled in the Privy Dashboard for server-side verification to succeed.

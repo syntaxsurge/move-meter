@@ -1,5 +1,6 @@
 import { withX402 } from "@x402/next";
 import { NextResponse, type NextRequest } from "next/server";
+import { logPaidCallServer } from "@/lib/convex/http";
 import { serverEnv } from "@/lib/env/server";
 import { getX402ServerEnv } from "@/lib/env/x402";
 import { getX402Server } from "@/lib/x402/server";
@@ -37,6 +38,13 @@ async function handler(): Promise<NextResponse<MeterReportResponse>> {
   const res = await fetch(serverEnv.MOVEMENT_FULLNODE_URL, { cache: "no-store" });
 
   if (!res.ok) {
+    void logPaidCallServer({
+      route: "/api/paid/meter-report",
+      network: x402Env.X402_NETWORK,
+      payTo: x402Env.X402_PAY_TO_ADDRESS,
+      priceUsd: x402Env.X402_PRICE_USD,
+      ok: false,
+    });
     return NextResponse.json<MeterReportResponse>(
       {
         ok: false,
@@ -48,6 +56,14 @@ async function handler(): Promise<NextResponse<MeterReportResponse>> {
   }
 
   const ledger = (await res.json()) as Partial<MovementLedgerInfo>;
+
+  void logPaidCallServer({
+    route: "/api/paid/meter-report",
+    network: x402Env.X402_NETWORK,
+    payTo: x402Env.X402_PAY_TO_ADDRESS,
+    priceUsd: x402Env.X402_PRICE_USD,
+    ok: true,
+  });
 
   return NextResponse.json<MeterReportResponse>({
     ok: true,

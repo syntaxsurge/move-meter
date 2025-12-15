@@ -45,4 +45,38 @@ export default defineSchema({
     paymentResponseHeader: v.optional(v.string()),
     decodeError: v.optional(v.string()),
   }).index("by_payer_createdAt", ["payerWalletAddress", "createdAt"]),
+
+  usageEvents: defineTable({
+    createdAt: v.number(),
+    day: v.string(), // YYYY-MM-DD (UTC)
+    route: v.string(),
+    network: v.string(),
+    payTo: v.string(),
+    priceUsd: v.string(),
+    priceUsdMicros: v.number(),
+    ok: v.boolean(),
+  })
+    .index("by_day", ["day"])
+    .index("by_route_day", ["route", "day"])
+    .index("by_route_createdAt", ["route", "createdAt"]),
+
+  usageDaily: defineTable({
+    day: v.string(), // YYYY-MM-DD (UTC)
+    route: v.string(),
+    calls: v.number(),
+    okCalls: v.number(),
+    revenueUsdMicros: v.number(),
+  })
+    .index("by_day", ["day"])
+    .index("by_route_day", ["route", "day"]),
+
+  portfolioReports: defineTable({
+    slug: v.string(),
+    address: v.string(),
+    movementChainId: v.number(),
+    generatedAt: v.number(),
+    data: v.any(),
+  })
+    .index("by_slug", ["slug"])
+    .index("by_address_generatedAt", ["address", "generatedAt"]),
 });

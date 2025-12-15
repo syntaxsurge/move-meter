@@ -6,12 +6,13 @@ import { decodePaymentResponseHeader } from "@x402/core/http";
 import { useX402Fetch } from "@privy-io/react-auth";
 import { api } from "@/lib/convex/api";
 import { MovementAddressSchema } from "@/lib/movement/validation";
-import { useEvmPaymentWallet } from "@/features/x402/useEvmPaymentWallet";
+import { EnsureMovementWallet } from "@/components/auth/EnsureMovementWallet";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useEvmPaymentWallet } from "@/features/x402/useEvmPaymentWallet";
 
 type Props = {
   endpoint: string;
@@ -21,30 +22,36 @@ type Props = {
   maxValue: bigint;
 };
 
-type MoveBalanceResponse =
-  | {
-      ok: false;
-      error: string;
-      status?: number;
-      details?: string;
-    }
-  | {
-      ok: true;
-      address: string;
-      chainId: number;
-      fullnodeUrl: string;
-      explorerUrl: string;
-      faucetUrl: string;
-      coin: {
-        type: string;
-        symbol: string;
-        decimals: number;
-      };
-      balance: {
-        raw: string;
-        formatted: string;
-      };
-    };
+type PortfolioBalance = {
+  amount: string;
+  assetType: string;
+  metadata: null | {
+    decimals: number | null;
+    iconUri: string | null;
+    name: string | null;
+    projectUri: string | null;
+    symbol: string | null;
+  };
+};
+
+type PortfolioActivity = {
+  transactionVersion: string;
+  amount: string;
+  assetType: string;
+  type: string;
+  transactionTimestamp: string;
+};
+
+type PortfolioReport = {
+  address: string;
+  balances: PortfolioBalance[];
+  recentActivities: PortfolioActivity[];
+  generatedAt: string;
+};
+
+type PortfolioResponse =
+  | { ok: false; error: string; details?: string }
+  | { ok: true; share: { slug: string }; report: PortfolioReport };
 
 function getExplorerTxUrl(network: string, tx: string): string | null {
   if (!tx) return null;
@@ -53,7 +60,22 @@ function getExplorerTxUrl(network: string, tx: string): string | null {
   return null;
 }
 
-export function PaidMoveBalanceCard({ endpoint, network, payTo, priceUsd, maxValue }: Props) {
+export function PaidPortfolioReportCard(props: Props) {
+  return (
+    <EnsureMovementWallet>
+      {({ movementAddress }) => <Inner {...props} movementAddress={movementAddress} />}
+    </EnsureMovementWallet>
+  );
+}
+
+function Inner({
+  endpoint,
+  network,
+  payTo,
+  priceUsd,
+  maxValue,
+  movementAddress,
+}: Props & { movementAddress: string }) {
   const { wrapFetchWithPayment } = useX402Fetch();
   const {
     walletsReady,
@@ -65,9 +87,10 @@ export function PaidMoveBalanceCard({ endpoint, network, payTo, priceUsd, maxVal
 
   const recordReceipt = useMutation(api.payments.recordReceipt);
 
-  const [movementAddress, setMovementAddress] = React.useState("");
+  const [address, setAddress] = React.useState(movementAddress);
   const [loading, setLoading] = React.useState(false);
-  const [result, setResult] = React.useState<MoveBalanceResponse | null>(null);
+  const [result, setResult] = React.useState<PortfolioResponse | null>(null);
+  const [shareSlug, setShareSlug] = React.useState<string | null>(null);
   const [paymentTx, setPaymentTx] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
 
@@ -80,27 +103,31 @@ export function PaidMoveBalanceCard({ endpoint, network, payTo, priceUsd, maxVal
     setLoading(true);
     setError(null);
     setResult(null);
+    setShareSlug(null);
     setPaymentTx(null);
 
     try {
-      const parsedAddress = MovementAddressSchema.safeParse(movementAddress);
+      const parsedAddress = MovementAddressSchema.safeParse(address);
       if (!parsedAddress.success) {
         throw new Error("Enter a valid Movement address (0x + hex)");
       }
 
-      const walletAddress = await ensurePaymentWallet();
-      if (!walletAddress) {
+      const payerWalletAddress = await ensurePaymentWallet();
+      if (!payerWalletAddress) {
         throw new Error("No payment wallet available");
       }
 
       const fetchWithPayment = wrapFetchWithPayment({
-        walletAddress,
+        walletAddress: payerWalletAddress,
         fetch,
         maxValue,
       });
 
-      const url = `${endpoint}?address=${encodeURIComponent(parsedAddress.data)}`;
-      const res = await fetchWithPayment(url, { method: "GET" });
+      const res = await fetchWithPayment(endpoint, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ address: parsedAddress.data, limit: 25 }),
+      });
 
       const paymentResponseHeader =
         res.headers.get("PAYMENT-RESPONSE") ?? res.headers.get("X-PAYMENT-RESPONSE");
@@ -115,7 +142,7 @@ export function PaidMoveBalanceCard({ endpoint, network, payTo, priceUsd, maxVal
               network: settle.network,
               payTo,
               priceUsd,
-              payerWalletAddress: walletAddress,
+              payerWalletAddress,
               payer: settle.payer,
               transaction: settle.transaction,
               paymentResponseHeader,
@@ -128,7 +155,7 @@ export function PaidMoveBalanceCard({ endpoint, network, payTo, priceUsd, maxVal
             network,
             payTo,
             priceUsd,
-            payerWalletAddress: walletAddress,
+            payerWalletAddress,
             paymentResponseHeader,
             decodeError: msg,
           });
@@ -139,8 +166,9 @@ export function PaidMoveBalanceCard({ endpoint, network, payTo, priceUsd, maxVal
         throw new Error(await res.text());
       }
 
-      const json = (await res.json()) as MoveBalanceResponse;
+      const json = (await res.json()) as PortfolioResponse;
       setResult(json);
+      if (json.ok) setShareSlug(json.share.slug);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Unknown error");
     } finally {
@@ -154,7 +182,7 @@ export function PaidMoveBalanceCard({ endpoint, network, payTo, priceUsd, maxVal
     <Card>
       <CardHeader>
         <CardTitle className="flex flex-wrap items-center justify-between gap-2">
-          <span>Premium MOVE Balance</span>
+          <span>Premium Portfolio Report</span>
           <div className="flex flex-wrap items-center gap-2">
             <Badge>{priceUsd}</Badge>
             <Badge variant="outline">{network}</Badge>
@@ -178,12 +206,12 @@ export function PaidMoveBalanceCard({ endpoint, network, payTo, priceUsd, maxVal
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="movementAddress">Movement address</Label>
+          <Label htmlFor="portfolioAddress">Movement address</Label>
           <div className="flex flex-col gap-2 sm:flex-row">
             <Input
-              id="movementAddress"
-              value={movementAddress}
-              onChange={(e) => setMovementAddress(e.target.value)}
+              id="portfolioAddress"
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
               placeholder="0x…"
               autoCapitalize="none"
               autoCorrect="off"
@@ -193,20 +221,20 @@ export function PaidMoveBalanceCard({ endpoint, network, payTo, priceUsd, maxVal
             <Button
               type="button"
               variant="secondary"
-              onClick={() => setMovementAddress("0x1")}
+              onClick={() => setAddress(movementAddress)}
               className="shrink-0"
             >
-              Use 0x1
+              Use my wallet
             </Button>
           </div>
           <p className="text-xs text-muted-foreground">
-            This calls Movement on-chain reads after a successful x402 payment.
+            Generates a paid report using Movement Indexer data, then stores a shareable snapshot.
           </p>
         </div>
 
         <div className="flex flex-wrap gap-2">
           <Button onClick={run} disabled={loading || !walletsReady}>
-            {loading ? "Processing…" : "Pay & Fetch Balance"}
+            {loading ? "Processing…" : "Pay & Generate"}
           </Button>
 
           <Button asChild variant="outline">
@@ -250,27 +278,23 @@ export function PaidMoveBalanceCard({ endpoint, network, payTo, priceUsd, maxVal
           </div>
         ) : null}
 
+        {shareSlug ? (
+          <div className="text-sm">
+            Share link:{" "}
+            <a className="underline underline-offset-4" href={`/r/${shareSlug}`}>
+              /r/{shareSlug}
+            </a>
+          </div>
+        ) : null}
+
         {error ? (
           <pre className="whitespace-pre-wrap rounded-md border bg-muted p-3 text-xs text-destructive">
             {error}
           </pre>
         ) : null}
 
-        {result?.ok ? (
-          <div className="rounded-md border bg-muted p-3 text-sm">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="font-mono">{result.address}</div>
-              <div className="text-muted-foreground">chainId: {result.chainId}</div>
-            </div>
-            <div className="mt-2 text-lg font-medium">
-              {result.balance.formatted} {result.coin.symbol}
-            </div>
-            <div className="mt-1 text-xs text-muted-foreground">
-              Raw: <span className="font-mono">{result.balance.raw}</span>
-            </div>
-          </div>
-        ) : result ? (
-          <pre className="whitespace-pre-wrap rounded-md border bg-muted p-3 text-xs text-destructive">
+        {result ? (
+          <pre className="overflow-auto rounded-md border bg-muted p-3 text-xs">
             {JSON.stringify(result, null, 2)}
           </pre>
         ) : null}
@@ -306,3 +330,4 @@ export function PaidMoveBalanceCard({ endpoint, network, payTo, priceUsd, maxVal
     </Card>
   );
 }
+

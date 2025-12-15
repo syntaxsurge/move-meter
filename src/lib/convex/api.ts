@@ -41,6 +41,39 @@ export type PaymentReceipt = {
   decodeError?: string;
 };
 
+export type UsageLogPaidCallArgs = {
+  route: string;
+  network: string;
+  payTo: string;
+  priceUsd: string;
+  ok: boolean;
+};
+
+export type UsageDailySummaryRow = {
+  day: string;
+  calls: number;
+  okCalls: number;
+  revenueUsd: number;
+};
+
+export type PortfolioReport = {
+  _id: string;
+  _creationTime: number;
+  slug: string;
+  address: string;
+  movementChainId: number;
+  generatedAt: number;
+  data: unknown;
+};
+
+export type PortfolioReportCreateArgs = {
+  slug: string;
+  address: string;
+  movementChainId: number;
+  generatedAt: number;
+  data: unknown;
+};
+
 export const api = {
   listings: {
     publicList: makeFunctionReference<"query", { limit?: number }, Listing[]>(
@@ -103,5 +136,25 @@ export const api = {
       { payerWalletAddress: string; limit?: number },
       PaymentReceipt[]
     >("payments:listReceiptsForWallet"),
+  },
+  usageEvents: {
+    logPaidCall: makeFunctionReference<"mutation", UsageLogPaidCallArgs, null>(
+      "usageEvents:logPaidCall"
+    ),
+    dailySummary: makeFunctionReference<
+      "query",
+      { days: number; route?: string },
+      UsageDailySummaryRow[]
+    >("usageEvents:dailySummary"),
+  },
+  portfolioReports: {
+    create: makeFunctionReference<
+      "mutation",
+      PortfolioReportCreateArgs,
+      { id: string; slug: string }
+    >("portfolioReports:create"),
+    getBySlug: makeFunctionReference<"query", { slug: string }, PortfolioReport | null>(
+      "portfolioReports:getBySlug"
+    ),
   },
 } as const;
