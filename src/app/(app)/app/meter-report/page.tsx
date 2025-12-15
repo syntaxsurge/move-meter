@@ -1,6 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getX402ServerEnv, usdToUsdcMicros } from "@/lib/env/x402";
 import { PaidMeterReportCard } from "@/features/x402/PaidMeterReportCard";
+import { PaidMoveBalanceCard } from "@/features/x402/PaidMoveBalanceCard";
 
 export default function MeterReportPage() {
   try {
@@ -8,7 +9,7 @@ export default function MeterReportPage() {
     const maxValue = usdToUsdcMicros(env.X402_PRICE_USD);
 
     return (
-      <div className="space-y-4">
+      <div className="space-y-6">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Premium Meter Report</h1>
           <p className="mt-1 text-sm text-muted-foreground">
@@ -18,6 +19,14 @@ export default function MeterReportPage() {
 
         <PaidMeterReportCard
           endpoint="/api/paid/meter-report"
+          network={env.X402_NETWORK}
+          payTo={env.X402_PAY_TO_ADDRESS}
+          priceUsd={env.X402_PRICE_USD}
+          maxValue={maxValue}
+        />
+
+        <PaidMoveBalanceCard
+          endpoint="/api/paid/movement/move-balance"
           network={env.X402_NETWORK}
           payTo={env.X402_PAY_TO_ADDRESS}
           priceUsd={env.X402_PRICE_USD}
@@ -49,4 +58,3 @@ export default function MeterReportPage() {
     );
   }
 }
-

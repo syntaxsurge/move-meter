@@ -364,12 +364,13 @@ Environment variables are validated via Zod:
 - `/marketplace` – public listings marketplace
 - `/marketplace/[slug]` – listing details with Try Console
 - `/app/dashboard` – authenticated dashboard
-- `/app/meter-report` – authenticated x402 pay-per-request report UI
+- `/app/meter-report` – authenticated x402 pay-per-request tools UI (meter report + MOVE balance lookup)
 - `/app/wallet` – authenticated wallet page
 - `/app/dev/dashboard` – authenticated provider dashboard
 - `/app/dev/new` – authenticated listing creation
 - `/api/movement/balance?address=0x...` – returns Movement base coin balance for an address
 - `/api/paid/meter-report` – x402-protected paid API returning Movement ledger snapshot
+- `/api/paid/movement/move-balance?address=0x...` – x402-protected paid API returning MOVE balance for an address
 
 ## Architecture Overview
 
@@ -377,13 +378,13 @@ Environment variables are validated via Zod:
 - `src/app/providers.tsx` wraps the app with `PrivyProvider` and `ConvexProvider` using `src/lib/env/client.ts`.
 - Authenticated routes live under `src/app/(app)/app/**` and are protected by `src/components/auth/AuthGate.tsx` (redirects to `/sign-in?next=...`).
 - Movement wallet creation is enforced client-side by `src/components/auth/EnsureMovementWallet.tsx` using Privy extended chains (`useCreateWallet` with `chainType: "movement"`).
-- On-chain balance reads happen server-side in `src/app/api/movement/balance/route.ts` using `src/lib/movement/client.ts` (Aptos TS SDK) and `src/lib/env/server.ts`.
+- On-chain Movement balance reads happen server-side in `src/app/api/movement/balance/route.ts` and `src/app/api/paid/movement/move-balance/route.ts` using `src/lib/movement/balance.ts` + `src/lib/movement/client.ts` (Aptos TS SDK).
 - UI primitives live in `src/components/ui/**` and the wallet UX is implemented in `src/features/wallet/MovementWalletCard.tsx` (SWR polling + faucet link).
 - Marketplace routes live in `src/app/(marketing)/marketplace/**` and are implemented in `src/features/listings/**` using Convex queries/actions.
 - Frontend Convex function references live in `src/lib/convex/api.ts` (manual `makeFunctionReference` API, no `convex/_generated/**` dependency).
 - x402 configuration is validated in `src/lib/env/x402.ts` and the resource server is initialized in `src/lib/x402/server.ts` (HTTP facilitator client + Exact EVM scheme registration).
 - The paid report endpoint is implemented in `src/app/api/paid/meter-report/route.ts` using `withX402` from `@x402/next` (settlement only after successful responses).
-- The paid report UI is implemented in `src/features/x402/PaidMeterReportCard.tsx` using Privy `useX402Fetch` to automatically handle HTTP 402 flows and store settlement receipts.
+- Paid x402 UI lives in `src/features/x402/**` (Privy `useX402Fetch` + Convex receipt storage) and is rendered on `src/app/(app)/app/meter-report/page.tsx`.
 - Provider listing creation and Try Console are implemented as Convex Node Actions in `convex/actions/listings.ts` (Privy identity token verification + SSRF-hardened fetch) and backed by `convex/listings.ts` + `convex/schema.ts`.
 - Payment receipts are stored in `paymentReceipts` in `convex/schema.ts` and written/read via `convex/payments.ts`.
 - Privy identity tokens must be enabled in the Privy Dashboard for server-side verification to succeed.
