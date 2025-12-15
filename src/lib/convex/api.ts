@@ -26,6 +26,21 @@ export type TryCallResult = {
   body: string;
 };
 
+export type PaymentReceipt = {
+  _id: string;
+  _creationTime: number;
+  createdAt: number;
+  endpoint: string;
+  network: string;
+  payTo: string;
+  priceUsd: string;
+  payerWalletAddress: string;
+  payer?: string;
+  transaction?: string;
+  paymentResponseHeader?: string;
+  decodeError?: string;
+};
+
 export const api = {
   listings: {
     publicList: makeFunctionReference<"query", { limit?: number }, Listing[]>(
@@ -67,5 +82,26 @@ export const api = {
       >("actions/listings:tryCall"),
     },
   },
+  payments: {
+    recordReceipt: makeFunctionReference<
+      "mutation",
+      {
+        endpoint: string;
+        network: string;
+        payTo: string;
+        priceUsd: string;
+        payerWalletAddress: string;
+        payer?: string;
+        transaction?: string;
+        paymentResponseHeader?: string;
+        decodeError?: string;
+      },
+      string
+    >("payments:recordReceipt"),
+    listReceiptsForWallet: makeFunctionReference<
+      "query",
+      { payerWalletAddress: string; limit?: number },
+      PaymentReceipt[]
+    >("payments:listReceiptsForWallet"),
+  },
 } as const;
-

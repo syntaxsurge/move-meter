@@ -342,11 +342,11 @@ Select **one** backend stack (Drizzle+Supabase or Convex) per project by default
 
 # Platform Summary
 
-MoveMeter is a Next.js 15 App Router app that uses Privy for authentication and Movement wallet provisioning, Convex as the backend data layer for marketplace listings, and a server Route Handler to read on-chain balances from Movement testnet RPC.
+MoveMeter is a Next.js 15 App Router app that uses Privy for authentication and Movement wallet provisioning, Convex as the backend data layer for marketplace listings and receipts, and x402 to enforce pay-per-request access to paid API routes.
 
 Environment variables are validated via Zod:
 - Public: `NEXT_PUBLIC_CONVEX_URL`, `NEXT_PUBLIC_PRIVY_APP_ID`
-- Server (Next.js): `MOVEMENT_CHAIN_ID`, `MOVEMENT_FULLNODE_URL`, `MOVEMENT_FAUCET_URL`, `MOVEMENT_EXPLORER_URL`, `MOVEMENT_BASE_COIN_TYPE`
+- Server (Next.js): `MOVEMENT_CHAIN_ID`, `MOVEMENT_FULLNODE_URL`, `MOVEMENT_FAUCET_URL`, `MOVEMENT_EXPLORER_URL`, `MOVEMENT_BASE_COIN_TYPE`, `X402_FACILITATOR_URL`, `X402_NETWORK`, `X402_PAY_TO_ADDRESS`, `X402_PRICE_USD`
 - Server (Convex): `PRIVY_APP_ID`, `PRIVY_APP_SECRET`
 
 ## Core Commands
@@ -364,10 +364,12 @@ Environment variables are validated via Zod:
 - `/marketplace` – public listings marketplace
 - `/marketplace/[slug]` – listing details with Try Console
 - `/app/dashboard` – authenticated dashboard
+- `/app/meter-report` – authenticated x402 pay-per-request report UI
 - `/app/wallet` – authenticated wallet page
 - `/app/dev/dashboard` – authenticated provider dashboard
 - `/app/dev/new` – authenticated listing creation
 - `/api/movement/balance?address=0x...` – returns Movement base coin balance for an address
+- `/api/paid/meter-report` – x402-protected paid API returning Movement ledger snapshot
 
 ## Architecture Overview
 
@@ -379,7 +381,11 @@ Environment variables are validated via Zod:
 - UI primitives live in `src/components/ui/**` and the wallet UX is implemented in `src/features/wallet/MovementWalletCard.tsx` (SWR polling + faucet link).
 - Marketplace routes live in `src/app/(marketing)/marketplace/**` and are implemented in `src/features/listings/**` using Convex queries/actions.
 - Frontend Convex function references live in `src/lib/convex/api.ts` (manual `makeFunctionReference` API, no `convex/_generated/**` dependency).
+- x402 configuration is validated in `src/lib/env/x402.ts` and the resource server is initialized in `src/lib/x402/server.ts` (HTTP facilitator client + Exact EVM scheme registration).
+- The paid report endpoint is implemented in `src/app/api/paid/meter-report/route.ts` using `withX402` from `@x402/next` (settlement only after successful responses).
+- The paid report UI is implemented in `src/features/x402/PaidMeterReportCard.tsx` using Privy `useX402Fetch` to automatically handle HTTP 402 flows and store settlement receipts.
 - Provider listing creation and Try Console are implemented as Convex Node Actions in `convex/actions/listings.ts` (Privy identity token verification + SSRF-hardened fetch) and backed by `convex/listings.ts` + `convex/schema.ts`.
+- Payment receipts are stored in `paymentReceipts` in `convex/schema.ts` and written/read via `convex/payments.ts`.
 - Privy identity tokens must be enabled in the Privy Dashboard for server-side verification to succeed.
 - Convex Node Actions that verify Privy identity tokens require `PRIVY_APP_ID` and `PRIVY_APP_SECRET` to be set in the Convex deployment environment variables.
 - Convex schema and functions live in `convex/**` and project settings live in `convex.json`.

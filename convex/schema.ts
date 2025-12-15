@@ -32,4 +32,17 @@ export default defineSchema({
     .index("by_slug", ["slug"])
     .index("by_active_createdAt", ["isActive", "createdAt"])
     .index("by_provider_createdAt", ["providerDid", "createdAt"]),
+
+  paymentReceipts: defineTable({
+    createdAt: v.number(),
+    endpoint: v.string(),
+    network: v.string(),
+    payTo: v.string(),
+    priceUsd: v.string(),
+    payerWalletAddress: v.string(),
+    payer: v.optional(v.string()),
+    transaction: v.optional(v.string()),
+    paymentResponseHeader: v.optional(v.string()),
+    decodeError: v.optional(v.string()),
+  }).index("by_payer_createdAt", ["payerWalletAddress", "createdAt"]),
 });
