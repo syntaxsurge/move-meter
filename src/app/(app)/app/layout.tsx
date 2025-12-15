@@ -4,8 +4,10 @@ import { AppShell } from "@/components/layout/AppShell";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
-    <AuthGate>
-      <AppShell>{children}</AppShell>
-    </AuthGate>
+    <React.Suspense fallback={<div className="p-6 text-sm text-muted-foreground">Loading…</div>}>
+      <AuthGate>
+        <AppShell>{children}</AppShell>
+      </AuthGate>
+    </React.Suspense>
   );
 }
